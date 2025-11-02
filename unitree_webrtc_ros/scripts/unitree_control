@@ -1,0 +1,5 @@
+#!/home/alex-lin/unitree_venv/bin/python3
+from unitree_webrtc_ros.unitree_control import main
+
+if __name__ == '__main__':
+    main()

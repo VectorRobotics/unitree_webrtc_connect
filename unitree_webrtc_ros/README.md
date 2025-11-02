@@ -17,91 +17,66 @@ ROS 2 Jazzy package for controlling Unitree Go2 robot via WebRTC connection. Pro
 
 ## Installation
 
-### Step 1: Install unitree_webrtc_connect in a Python virtual environment
-
-The `unitree_webrtc_connect` package is NOT available on PyPI. You need to install it from source in a virtual environment:
+### Step 1: Install unitree_webrtc_connect in a virtual environment
 
 ```bash
-# Install system dependencies first
+# Install system dependencies
 sudo apt update
 sudo apt install portaudio19-dev
 
-# Create a virtual environment in your home directory
+# Create and activate virtual environment
 python3 -m venv ~/unitree_venv
-
-# Activate the virtual environment
 source ~/unitree_venv/bin/activate
 
-# Clone the unitree_webrtc_connect repository
+# Install ROS 2 dependencies
+pip install PyYAML
+
+# Install unitree_webrtc_connect
 cd ~
 git clone https://github.com/legion1581/go2_webrtc_connect.git
 cd go2_webrtc_connect
-
-# Install it in editable mode (this installs all dependencies too)
 pip install -e .
-
-# Verify installation
-python -c "import unitree_webrtc_connect; print('Installation successful!')"
-
-# Deactivate when done
-deactivate
 ```
 
-**Important Notes:**
-- The package is called `go2_webrtc_connect` in the repository but imports as `unitree_webrtc_connect`
-- Installing with `-e .` makes it editable, so updates from git pull will be reflected immediately
-- The venv will be at `~/unitree_venv` and the source code at `~/go2_webrtc_connect`
-
-### Step 2: Set up your ROS 2 workspace
+### Step 2: Build the ROS 2 package
 
 ```bash
-# Create workspace if you don't have one
+# Activate venv (if not already active)
+source ~/unitree_venv/bin/activate
+
+# Set up workspace and build
 mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
-
-# Copy this package to your workspace
 cp -r /path/to/unitree_webrtc_ros .
-```
-
-### Step 3: Build the package
-
-```bash
 cd ~/ros2_ws
-
-# Source ROS 2
 source /opt/ros/jazzy/setup.bash
-
-# Build the package
 colcon build --packages-select unitree_webrtc_ros
-
-# Source the workspace
-source install/setup.bash
 ```
+
+**Note**: This package uses `#!/usr/bin/env python3` which automatically uses the venv's Python when activated.
 
 ## Usage
 
-### Activating the environment
+### Running the node
 
-Every time you want to use this package, you need to:
-
-1. **Activate the Python virtual environment** (in one terminal or add to your bashrc):
 ```bash
+# 1. Activate venv
 source ~/unitree_venv/bin/activate
-```
 
-2. **Source ROS 2 and your workspace**:
-```bash
+# 2. Source ROS 2
 source /opt/ros/jazzy/setup.bash
 source ~/ros2_ws/install/setup.bash
+
+# 3. Launch
+ros2 launch unitree_webrtc_ros unitree_control.launch.py
 ```
 
-**Tip**: Add this to your `~/.bashrc` for convenience:
+**Convenience alias** (add to `~/.bashrc`):
 ```bash
-# Add to ~/.bashrc
 alias ros_unitree='source ~/unitree_venv/bin/activate && source /opt/ros/jazzy/setup.bash && source ~/ros2_ws/install/setup.bash'
 ```
 
-Then you can just run `ros_unitree` to set everything up.
+Then just: `ros_unitree`
 
 ### Launch the node
 
@@ -118,6 +93,11 @@ ros2 launch unitree_webrtc_ros unitree_control.launch.py robot_ip:=192.168.8.100
 Launch with LocalAP connection (robot's own WiFi at 192.168.12.1):
 ```bash
 ros2 launch unitree_webrtc_ros unitree_control.launch.py connection_method:=LocalAP
+```
+
+Launch with wireless controller mode:
+```bash
+ros2 launch unitree_webrtc_ros unitree_control.launch.py control_mode:=wireless_controller
 ```
 
 ### Control the robot
@@ -160,6 +140,7 @@ unitree_control:
   ros__parameters:
     robot_ip: "192.168.8.181"
     connection_method: "LocalSTA"  # Options: LocalAP, LocalSTA, Remote
+    control_mode: "sport_cmd"  # Options: sport_cmd, wireless_controller
 ```
 
 ## Topics
@@ -183,6 +164,9 @@ unitree_control:
 
 - `robot_ip` (string, default: "192.168.8.181"): IP address of the robot
 - `connection_method` (string, default: "LocalSTA"): Connection method (LocalAP/LocalSTA/Remote)
+- `control_mode` (string, default: "sport_cmd"): Control mode for cmd_vel
+  - `sport_cmd`: Uses SPORT_CMD["Move"] API (recommended, more reliable)
+  - `wireless_controller`: Uses WIRELESS_CONTROLLER topic (mimics joystick control)
 
 ## Connection Methods
 
@@ -192,10 +176,13 @@ unitree_control:
 
 ## Implementation Details
 
-- **Movement**: Uses `SPORT_CMD["Move"]` from unitree_webrtc_connect
+- **Movement**: Supports two control modes via `control_mode` parameter:
+  - `sport_cmd` (default): Uses `SPORT_CMD["Move"]` API - more reliable, better for precise control
+  - `wireless_controller`: Uses `WIRELESS_CONTROLLER` topic - mimics physical joystick
 - **Command forwarding**: Each TwistStamped message triggers one move command
 - **Thread-safe async**: Background thread runs asyncio event loop for WebRTC connection
 - **No auto-stop**: Robot continues last command until new one received (send zeros to stop)
+- **Coordinate mapping**: Automatically handles ROS->Unitree coordinate transformations
 
 ## Troubleshooting
 
@@ -224,25 +211,27 @@ source ~/unitree_venv/bin/activate
 
 ### Virtual environment issues
 
-If ROS 2 can't find packages after activating venv:
+If you get `ModuleNotFoundError`, make sure venv is activated:
 ```bash
-# Make sure to activate venv BEFORE sourcing ROS 2
 source ~/unitree_venv/bin/activate
 source /opt/ros/jazzy/setup.bash
 source ~/ros2_ws/install/setup.bash
 ```
 
+Always activate venv before building and running.
+
 ## Example: Using with teleop
 
 If you have a teleop node that publishes `TwistStamped`:
 ```bash
-# Terminal 1: Launch unitree control
+# Terminal 1: Launch unitree control (needs venv)
 source ~/unitree_venv/bin/activate
 source /opt/ros/jazzy/setup.bash
 source ~/ros2_ws/install/setup.bash
 ros2 launch unitree_webrtc_ros unitree_control.launch.py
 
-# Terminal 2: Run your teleop
+# Terminal 2: Run your teleop (doesn't need venv unless it uses Python packages from venv)
+source /opt/ros/jazzy/setup.bash
 ros2 run <your_package> <teleop_node>
 ```
 

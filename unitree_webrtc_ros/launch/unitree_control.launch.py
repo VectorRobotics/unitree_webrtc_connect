@@ -25,6 +25,12 @@ def generate_launch_description():
         description='Connection method: LocalAP, LocalSTA, or Remote'
     )
 
+    control_mode_arg = DeclareLaunchArgument(
+        'control_mode',
+        default_value='sport_cmd',
+        description='Control mode: sport_cmd or wireless_controller'
+    )
+
     # Create node
     unitree_control_node = Node(
         package='unitree_webrtc_ros',
@@ -34,6 +40,7 @@ def generate_launch_description():
         parameters=[{
             'robot_ip': LaunchConfiguration('robot_ip'),
             'connection_method': LaunchConfiguration('connection_method'),
+            'control_mode': LaunchConfiguration('control_mode'),
         }],
         remappings=[
             # Uncomment if you need to remap topics
@@ -44,5 +51,6 @@ def generate_launch_description():
     return LaunchDescription([
         robot_ip_arg,
         connection_method_arg,
+        control_mode_arg,
         unitree_control_node,
     ])

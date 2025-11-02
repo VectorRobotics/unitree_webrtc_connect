@@ -26,10 +26,12 @@ class UnitreeControlNode(Node):
         # Declare parameters
         self.declare_parameter('robot_ip', '192.168.8.181')
         self.declare_parameter('connection_method', 'LocalSTA')
+        self.declare_parameter('control_mode', 'sport_cmd')  # Options: 'sport_cmd' or 'wireless_controller'
 
         # Get parameters
         self.robot_ip = self.get_parameter('robot_ip').value
         connection_method_str = self.get_parameter('connection_method').value
+        self.control_mode = self.get_parameter('control_mode').value
 
         # Map connection method string to enum
         connection_method_map = {
@@ -42,6 +44,7 @@ class UnitreeControlNode(Node):
         )
 
         self.get_logger().info(f'Connecting to robot at {self.robot_ip} using {connection_method_str}')
+        self.get_logger().info(f'Control mode: {self.control_mode}')
 
         # Initialize WebRTC connection
         self.conn = None
@@ -119,20 +122,36 @@ class UnitreeControlNode(Node):
 
         x, y, yaw = msg.twist.linear.x, msg.twist.linear.y, msg.twist.angular.z
 
-        # Use SPORT_CMD["Move"] instead of WIRELESS_CONTROLLER
-        async def async_move():
-            await self.conn.datachannel.pub_sub.publish_request_new(
-                RTC_TOPIC["SPORT_MOD"],
-                {
-                    "api_id": SPORT_CMD["Move"],
-                    "parameter": {"x": x, "y": y, "z": yaw}
-                }
-            )
+        # Choose control mode based on parameter
+        if self.control_mode == 'wireless_controller':
+            # WebRTC coordinate mapping for wireless controller:
+            # lx - Positive right, negative left (maps to ROS y)
+            # ly - Positive forward, negative backwards (maps to ROS x)
+            # rx - Positive rotate right, negative rotate left (maps to ROS yaw)
+            async def async_move():
+                self.conn.datachannel.pub_sub.publish_without_callback(
+                    RTC_TOPIC["WIRELESS_CONTROLLER"],
+                    data={"lx": -y, "ly": x, "rx": -yaw, "ry": 0},
+                )
+        else:  # sport_cmd (default)
+            # SPORT_CMD["Move"] coordinate mapping:
+            # x - forward/backward
+            # y - left/right
+            # z - yaw rotation
+            async def async_move():
+                await self.conn.datachannel.pub_sub.publish_request_new(
+                    RTC_TOPIC["SPORT_MOD"],
+                    {
+                        "api_id": SPORT_CMD["Move"],
+                        "parameter": {"x": x, "y": y, "z": yaw}
+                    }
+                )
 
         try:
-            # Single command for continuous movement
             future = asyncio.run_coroutine_threadsafe(async_move(), self.loop)
-            future.result()
+            if self.control_mode == 'sport_cmd':
+                future.result()  # Wait for sport_cmd
+            # wireless_controller uses publish_without_callback, no need to wait
         except Exception as e:
             self.get_logger().error(f'Failed to send cmd_vel: {e}')
 

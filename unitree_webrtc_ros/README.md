@@ -33,8 +33,8 @@ pip install PyYAML
 
 # Install unitree_webrtc_connect
 cd ~
-git clone https://github.com/legion1581/go2_webrtc_connect.git
-cd go2_webrtc_connect
+git clone https://github.com/VectorRobotics/unitree_webrtc_connect.git
+cd unitree_webrtc_connect
 pip install -e .
 ```
 
